@@ -7,7 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 
 load_dotenv()
 
-def get_gemini_llm(model="gemini-2.0-flash-exp", temperature=0):
+def get_gemini_llm(model="gemini-1.5-flash", temperature=0):  # ← Changed from gemini-2.0-flash-exp
     """Initialize Gemini LLM"""
     return ChatGoogleGenerativeAI(
         model=model,
