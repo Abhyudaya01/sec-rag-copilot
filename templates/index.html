@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEC RAG Copilot | UMD</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div>
+                    <h1>SEC Filings RAG Copilot</h1>
+                    <p class="subtitle">Intelligent Financial Document Analysis with AI</p>
+                </div>
+                <div class="header-right">
+                    <!-- Theme Toggle -->
+                    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <div class="badge">Built at UMD</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="layout">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <!-- Company Info -->
+                <div class="card">
+                    <h3>🏢 Current Analysis</h3>
+                    <div class="info-box">
+                        <strong>Company:</strong> Apple Inc.<br>
+                        <strong>Ticker:</strong> AAPL<br>
+                        <strong>Filings:</strong> 10-K, 10-Q
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="card">
+                    <h3>🔧 Settings</h3>
+                    <label class="setting-label">
+                        Chunks to Retrieve: <strong id="topKValue">5</strong>
+                    </label>
+                    <input type="range" id="topK" min="1" max="10" value="5" class="slider">
+                    
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showReasoning" checked>
+                        Show Chain-of-Thought
+                    </label>
+                </div>
+
+                <!-- Metrics -->
+                <div class="card">
+                    <h3>📈 Performance</h3>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-value" id="avgLatency">-</div>
+                            <div class="metric-label">Avg Latency</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="accuracy">-</div>
+                            <div class="metric-label">Accuracy</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="totalQueries">0</div>
+                            <div class="metric-label">Total Queries</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Example Queries -->
+                <div class="card">
+                    <h3>💡 Examples</h3>
+                    <button class="example-btn" onclick="setQuery('How much revenue did Apple generate in fiscal 2025?')">
+                        📈 Revenue Analysis
+                    </button>
+                    <button class="example-btn" onclick="setQuery('What are Apple\'s business segments?')">
+                        🏢 Business Segments
+                    </button>
+                    <button class="example-btn" onclick="setQuery('What is Apple\'s dividend policy?')">
+                        💰 Dividend Policy
+                    </button>
+                    <button class="example-btn" onclick="setQuery('Describe iPhone segment performance')">
+                        📱 iPhone Business
+                    </button>
+                    <button class="example-btn" onclick="setQuery('What does management say about future outlook?')">
+                        📋 Management Outlook
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Query Input -->
+                <div class="card">
+                    <h2>🔍 Ask a Question</h2>
+                    <textarea 
+                        id="queryInput" 
+                        placeholder="e.g., How much revenue did Apple generate in the latest fiscal year?"
+                        rows="4"
+                    ></textarea>
+                    
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="analyze()">
+                            🚀 Analyze
+                        </button>
+                        <button class="btn-secondary" onclick="clearQuery()">
+                            🗑️ Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interactive Loading -->
+                <div id="loading" class="loading-container" style="display:none;">
+                    <div class="loading-card">
+                        <div class="spinner-container">
+                            <div class="spinner"></div>
+                            <div class="spinner-glow"></div>
+                        </div>
+                        <h3 class="loading-title">🤖 AI Processing in Progress</h3>
+                        <div class="loading-steps">
+                            <div class="step" id="step1">
+                                <span class="step-icon">🔎</span>
+                                <span class="step-text">Selecting optimal Chain-of-Thought prompt...</span>
+                            </div>
+                            <div class="step" id="step2">
+                                <span class="step-icon">📚</span>
+                                <span class="step-text">Retrieving relevant chunks from FAISS...</span>
+                            </div>
+                            <div class="step" id="step3">
+                                <span class="step-icon">🧠</span>
+                                <span class="step-text">Analyzing with Gemini 2.5 Flash...</span>
+                            </div>
+                        </div>
+                        <div class="loading-progress">
+                            <div class="progress-bar"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div id="results" style="display:none;">
+                    <!-- Metrics Cards -->
+                    <div class="results-metrics">
+                        <div class="metric-card">
+                            <div class="metric-icon">⏱️</div>
+                            <div class="metric-value" id="responseTime">-</div>
+                            <div class="metric-label">Response Time</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">📎</div>
+                            <div class="metric-value" id="numSources">-</div>
+                            <div class="metric-label">Sources</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">🎯</div>
+                            <div class="metric-value">✓</div>
+                            <div class="metric-label">Prompt Selected</div>
+                        </div>
+                    </div>
+
+                    <!-- Answer -->
+                    <div class="card answer-card">
+                        <div class="card-header">
+                            <h3>📋 Analysis Result</h3>
+                            <span class="badge-small">AI Generated</span>
+                        </div>
+                        <div id="answerContent" class="answer-box"></div>
+                    </div>
+
+                    <!-- Source Chunks -->
+                    <div id="chunksCard" class="card chunks-card" style="display:none;">
+                        <div class="card-header">
+                            <h3>📦 Retrieved Chunks</h3>
+                            <span class="badge-small" id="chunkCount">0 chunks</span>
+                        </div>
+                        <div id="chunksContent" class="chunks-container"></div>
+                    </div>
+
+                    <!-- Citations -->
+                    <div id="citationsCard" class="card" style="display:none;">
+                        <div class="card-header">
+                            <h3>📚 Source Citations</h3>
+                            <span class="caption-inline">Full traceability to SEC filings</span>
+                        </div>
+                        <div id="citationsContent"></div>
+                    </div>
+
+                    <!-- Export -->
+                    <div class="export-section">
+                        <button class="btn-secondary" onclick="exportResults()">
+                            📥 Export Report
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p><strong>SEC Filings RAG Copilot</strong> | Built by <strong>Abhyudaya Lohani</strong></p>
+            <p>🎓 University of Maryland, College Park | 💼 Seeking AI/ML & Research Opportunities</p>
+            <p class="tech-stack">Powered by Google Gemini 2.5 Flash • LangChain • FAISS</p>
+        </footer>
+    </div>
+
+    <script>
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            
+            const icon = document.querySelector('.theme-icon');
+            icon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+            
+            localStorage.setItem('theme', newTheme);
+        }
+
+        // Update slider
+        document.getElementById('topK').addEventListener('input', function() {
+            document.getElementById('topKValue').textContent = this.value;
+        });
+
+        // Set query
+        function setQuery(text) {
+            document.getElementById('queryInput').value = text;
+            document.getElementById('queryInput').focus();
+        }
+
+        // Clear
+        function clearQuery() {
+            document.getElementById('queryInput').value = '';
+            document.getElementById('results').style.display = 'none';
+        }
+
+        // Update sidebar metrics
+        function updateSidebarMetrics(metrics) {
+            if (metrics) {
+                document.getElementById('avgLatency').textContent = metrics.avg_latency + 's';
+                document.getElementById('accuracy').textContent = metrics.accuracy + '%';
+                document.getElementById('totalQueries').textContent = metrics.total_queries;
+            }
+        }
+
+        // Animated loading steps
+        function animateLoading() {
+            const steps = ['step1', 'step2', 'step3'];
+            let currentStep = 0;
+            
+            const interval = setInterval(() => {
+                steps.forEach(s => document.getElementById(s).classList.remove('active'));
+                document.getElementById(steps[currentStep]).classList.add('active');
+                currentStep = (currentStep + 1) % steps.length;
+            }, 1500);
+            
+            return interval;
+        }
+
+        // Analyze
+        async function analyze() {
+            const query = document.getElementById('queryInput').value.trim();
+            const topK = parseInt(document.getElementById('topK').value);
+            
+            if (!query) {
+                alert('Please enter a question.');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('results').style.display = 'none';
+            
+            const loadingInterval = animateLoading();
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, top_k: topK })
+                });
+
+                const data = await response.json();
+
+                clearInterval(loadingInterval);
+
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                clearInterval(loadingInterval);
+                alert('Error: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Display results
+        function displayResults(data) {
+            document.getElementById('results').style.display = 'block';
+
+            // Update sidebar metrics
+            if (data.metrics) {
+                updateSidebarMetrics(data.metrics);
+            }
+
+            // Metrics
+            document.getElementById('responseTime').textContent = data.latency + 's';
+            document.getElementById('numSources').textContent = data.num_sources;
+
+            // Display answer
+            const showReasoning = document.getElementById('showReasoning').checked;
+            let answerHTML = data.answer;
+            
+            // Format answer
+            answerHTML = answerHTML
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            if (!showReasoning && (data.answer.includes('Final Answer:') || data.answer.includes('Final answer:'))) {
+                const parts = data.answer.split(/Final [Aa]nswer:/);
+                answerHTML = '<div class="final-answer"><strong>Final Answer:</strong> ' + parts[parts.length - 1].replace(/\n/g, '<br>') + '</div>';
+            }
+            
+            document.getElementById('answerContent').innerHTML = answerHTML;
+
+            // Display chunks
+            const chunksCard = document.getElementById('chunksCard');
+            const chunksContent = document.getElementById('chunksContent');
+            
+            if (data.citations && data.citations.length > 0) {
+                document.getElementById('chunkCount').textContent = data.citations.length + ' chunks';
+                chunksContent.innerHTML = data.citations.map((citation, i) => `
+                    <div class="chunk-item">
+                        <div class="chunk-header">
+                            <span class="chunk-number">Chunk ${i + 1}</span>
+                            <span class="chunk-badge">SEC Filing</span>
+                        </div>
+                        <div class="chunk-content">${citation.replace(/\n/g, '<br>')}</div>
+                    </div>
+                `).join('');
+                chunksCard.style.display = 'block';
+            } else {
+                chunksCard.style.display = 'none';
+            }
+
+            // Citations
+            const citationsCard = document.getElementById('citationsCard');
+            const citationsContent = document.getElementById('citationsContent');
+            
+            if (data.citations && data.citations.length > 0) {
+                citationsContent.innerHTML = data.citations.map((citation, i) => `
+                    <details class="citation-item" ${i === 0 ? 'open' : ''}>
+                        <summary>📄 Source ${i + 1}</summary>
+                        <div class="citation-text">${citation.replace(/\n/g, '<br>')}</div>
+                    </details>
+                `).join('');
+                citationsCard.style.display = 'block';
+            } else {
+                citationsCard.style.display = 'none';
+            }
+
+            // Scroll to results
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Export
+        function exportResults() {
+            const query = document.getElementById('queryInput').value;
+            const answer = document.getElementById('answerContent').innerText;
+            const citations = Array.from(document.querySelectorAll('.citation-text'))
+                .map((el, i) => `${i + 1}. ${el.innerText}`)
+                .join('\n\n');
+
+            const content = `SEC FILINGS ANALYSIS REPORT
+Generated: ${new Date().toLocaleString()}
+Company: Apple Inc. (AAPL)
+
+QUERY:
+${query}
+
+ANSWER:
+${answer}
+
+CITATIONS:
+${citations || 'No citations available'}
+
+---
+Generated by SEC RAG Copilot | University of Maryland
+`;
+
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sec_analysis_${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Enter key support
+        document.getElementById('queryInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                analyze();
+            }
+        });
+
+        // Load saved preferences and metrics
+        window.addEventListener('load', async function() {
+            // Load theme preference
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            const icon = document.querySelector('.theme-icon');
+            icon.textContent = savedTheme === 'dark' ? '🌙' : '☀️';
+            
+            // Load initial metrics
+            try {
+                const response = await fetch('/metrics');
+                const data = await response.json();
+                if (data.success && data.metrics) {
+                    updateSidebarMetrics(data.metrics);
+                }
+            } catch (error) {
+                console.log('Could not load initial metrics');
+            }
+        });
+    </script>
+</body>
+</html>
